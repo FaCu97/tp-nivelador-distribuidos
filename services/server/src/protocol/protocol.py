@@ -7,9 +7,9 @@ NAME_MAX_SIZE = 255
 BYTE_SIZE = 1
 BATCH_COUNT_SIZE = 2
 DOCUMENT_SIZE = 4
-NUMBER_SIZE = 2
+NUMBER_SIZE = 4
 MAX_DOCUMENT = 0xFFFFFFFF
-MAX_NUMBER = 0xFFFF
+MAX_NUMBER = 0xFFFFFFFF
 
 class Opcode(IntEnum):
     SEND_BETS = 0x01
@@ -72,7 +72,7 @@ def marshal_bet(bet: Bet) -> bytes:
     if bet.document < 0 or bet.document > MAX_DOCUMENT:
         raise ValueError("el documento no entra en uint32")
     if bet.number < 0 or bet.number > MAX_NUMBER:
-        raise ValueError("el número no entra en uint16")
+        raise ValueError("el número no entra en uint32")
 
     return (
         bytes([len(first_name)])
@@ -81,7 +81,7 @@ def marshal_bet(bet: Bet) -> bytes:
         + last_name
         + bet.document.to_bytes(4, byteorder="big")
         + birthdate
-        + bet.number.to_bytes(2, byteorder="big")
+        + bet.number.to_bytes(NUMBER_SIZE, byteorder="big")
     )
 
 def marshal_bets(bets: list[Bet]) -> bytes:

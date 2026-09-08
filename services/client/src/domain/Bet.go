@@ -13,7 +13,7 @@ type Bet struct {
 	LastName string
 	Dni	uint32
 	Date   string
-    Number uint16
+    Number uint32
 }
 
 const (
@@ -61,7 +61,7 @@ func (bet *Bet) MarshalBet() ([]byte, error) {
 	}
 	buf.Write(dateBytes)
 
-	// 5. NUMBER (uint16) -> 2 bytes en Big-Endian (Network Byte Order)
+	// 5. NUMBER (uint32) -> 4 bytes en Big-Endian (Network Byte Order)
 	if err := binary.Write(buf, binary.BigEndian, bet.Number); err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func UnmarshalBet(data []byte) (*Bet, int, error) {
 	}
 	bet.Date = string(dateBytes)
 
-	// 5. NUMBER (uint16) -> 2 bytes en Big-Endian (Network Byte Order)
+	// 5. NUMBER (uint32) -> 4 bytes en Big-Endian (Network Byte Order)
 	if err := binary.Read(buf, binary.BigEndian, &bet.Number); err != nil {
 		return nil, 0, err
 	}
@@ -176,7 +176,7 @@ func NewBetFromInputLine(line string) (*Bet, error) {
 		return nil, fmt.Errorf("DNI inválido: %s", parts[2])
 	}
 
-	number, err := strconv.ParseUint(parts[4], 10, 16)
+	number, err := strconv.ParseUint(parts[4], 10, 32)
 	if err != nil {
 		return nil, fmt.Errorf("Número inválido: %s", parts[4])
 	}
@@ -186,7 +186,7 @@ func NewBetFromInputLine(line string) (*Bet, error) {
 		LastName: parts[1],
 		Dni:      uint32(dni),
 		Date:     parts[3],
-		Number:   uint16(number),
+		Number:   uint32(number),
 	}
 
 	return bet, nil

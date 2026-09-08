@@ -33,7 +33,6 @@ utilizan big-endian:
 
 | Campo | Tamaño | Descripción |
 |---|---:|---|
-| `BET_COUNT` | 2 bytes | Cantidad de apuestas, como uint16 |
 | `BET_COUNT` | 2 bytes | Cantidad de apuestas del batch como `uint16`. |
 | `BET_1 ... BET_N` | Variable | Apuestas serializadas consecutivamente. |
 
@@ -47,7 +46,7 @@ Cada apuesta tiene este formato:
 | `LAST_NAME` | Variable | Apellido codificado en UTF-8. |
 | `DOCUMENT` | 4 bytes | Documento como `uint32`. |
 | `BIRTHDATE` | 10 bytes | Fecha en formato `YYYY-MM-DD`. |
-| `NUMBER` | 2 bytes | Número como `uint16`. |
+| `NUMBER` | 4 bytes | Número como `uint32`. |
 
 ## Lista de ganadores
 
@@ -62,6 +61,9 @@ BET_2
 
 El cliente interpreta este payload cuando recibe el opcode `WINNERS_LIST` y
 persiste los ganadores correspondientes a su agencia en `OUTPUT_FILE`.
+
+El campo `NUMBER` ocupa 4 bytes y se representa como `uint32` en big-endian,
+tanto en los batches enviados por el cliente como en la lista de ganadores.
 
 
 ## Flujo de mensajes
