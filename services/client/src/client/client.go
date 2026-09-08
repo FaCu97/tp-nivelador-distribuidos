@@ -1,12 +1,13 @@
 package client
 
 import (
+	"bufio"
 	"fmt"
 	"net"
-	"time"
 	"os"
-	"bufio"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/domain"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
@@ -26,8 +27,10 @@ type ClientConfig struct {
 }
 
 type Client struct {
-	conn   net.Conn
-	config ClientConfig
+	conn      net.Conn
+	config    ClientConfig
+	shutdown  chan struct{}
+	closeOnce sync.Once
 }
 
 func NewClient(config ClientConfig) (*Client, error) {
@@ -37,8 +40,28 @@ func NewClient(config ClientConfig) (*Client, error) {
 		return nil, err
 	}
 
-	client := &Client{conn: conn, config: config}
+	client := &Client{
+		conn:     conn,
+		config:   config,
+		shutdown: make(chan struct{}),
+	}
 	return client, nil
+}
+
+func (client *Client) Close() {
+	client.closeOnce.Do(func() {
+		close(client.shutdown)
+		client.conn.Close()
+	})
+}
+
+func (client *Client) IsShutdown() bool {
+	select {
+	case <-client.shutdown:
+		return true
+	default:
+		return false
+	}
 }
 
 func connectToServer(host, port string) (net.Conn, error) {
@@ -64,7 +87,7 @@ func connectToServer(host, port string) (net.Conn, error) {
 
 func (client *Client) Run() error {
 	const mainAction = "test-echo-server"
-	defer client.conn.Close()
+	defer client.Close()
 
 	input_file, err := os.Open(client.config.InputFile)
 	if err != nil {
@@ -72,7 +95,7 @@ func (client *Client) Run() error {
 		return err
 	}
 	defer input_file.Close()
-	
+
 	output_file, err := os.OpenFile(client.config.OutputFile, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		logger.Error("open-output-file", logger.Fail, "err", err)
@@ -88,6 +111,9 @@ func (client *Client) Run() error {
 	scanner := bufio.NewScanner(input_file)
 	bets := make([]*domain.Bet, 0)
 	for scanner.Scan() {
+		if client.IsShutdown() {
+			return nil
+		}
 		clientMessage := scanner.Text()
 		bet, err := domain.NewBetFromInputLine(clientMessage)
 		if err != nil {
@@ -114,6 +140,9 @@ func (client *Client) Run() error {
 
 			ackOpcode, _, _, err := safe_socket.RecvFrame(client.conn)
 			if err != nil {
+				if client.IsShutdown() {
+					return nil
+				}
 				return err
 			}
 
@@ -123,7 +152,7 @@ func (client *Client) Run() error {
 			bets = make([]*domain.Bet, 0)
 			bet_count = 0
 		}
-    }
+	}
 	if bet_count > 0 {
 		payload_bets, err := domain.MarshalBets(bets)
 		if err != nil {
@@ -141,6 +170,9 @@ func (client *Client) Run() error {
 
 		ackOpcode, _, _, err := safe_socket.RecvFrame(client.conn)
 		if err != nil {
+			if client.IsShutdown() {
+				return nil
+			}
 			return err
 		}
 
@@ -150,7 +182,7 @@ func (client *Client) Run() error {
 	}
 
 	if err := scanner.Err(); err != nil {
-        logger.Error("scan-file", logger.Fail, "err", err)
+		logger.Error("scan-file", logger.Fail, "err", err)
 		return err
 	}
 
@@ -160,6 +192,9 @@ func (client *Client) Run() error {
 
 	opcode, _, responseBuffer, err := safe_socket.RecvFrame(client.conn)
 	if err != nil {
+		if client.IsShutdown() {
+			return nil
+		}
 		logger.Error("recv-response", logger.Fail, "agency-id", client.config.AgencyId)
 		return err
 	}

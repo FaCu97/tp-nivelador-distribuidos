@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 
 	client "github.com/7574-sistemas-distribuidos/tp-nivelador/src/client"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
@@ -68,7 +70,24 @@ func run() int {
 		return 1
 	}
 
+	shutdown := make(chan struct{})
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGTERM)
+	defer signal.Stop(signals)
+	defer close(shutdown)
+
+	go func() {
+		select {
+		case <-signals:
+			client.Close()
+		case <-shutdown:
+		}
+	}()
+
 	if err := client.Run(); err != nil {
+		if client.IsShutdown() {
+			return 0
+		}
 		logger.Error("client-run", logger.Fail, "err", err)
 		return 1
 	}

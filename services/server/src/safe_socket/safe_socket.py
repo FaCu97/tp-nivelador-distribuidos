@@ -10,11 +10,11 @@ def recv_all(socket: socket.socket, size):
     bytesRead = 0
     chunks = []
     while bytesRead < bytesToRead:
-        chunk = socket.recv(bytesToRead - bytesRead) 
-        bytesRead += len(chunk)
-        chunks.append(chunk)
+        chunk = socket.recv(bytesToRead - bytesRead)
         if chunk == b"":
             raise RuntimeError("socket connection broken")
+        bytesRead += len(chunk)
+        chunks.append(chunk)
 
     return b"".join(chunks)
 
@@ -24,9 +24,9 @@ def send_all(socket: socket.socket, bytes):
     bytesWritten = 0
     while bytesWritten < bytesToWrite:
         n = socket.send(bytes[bytesWritten:])
-        bytesWritten += n
         if n == 0:
             raise RuntimeError("socket connection broken")
+        bytesWritten += n
         
     return bytesWritten
 
