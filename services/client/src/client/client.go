@@ -1,21 +1,20 @@
 package client
 
 import (
+	"fmt"
 	"net"
 	"time"
 	"os"
 	"bufio"
+	"strconv"
 
+	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/domain"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/logger"
 	"github.com/7574-sistemas-distribuidos/tp-nivelador/src/safe_socket"
 )
 
 const CONNECTION_ATTEMPTS_MAX = 15
 const CONNECTION_ATTEMPS_DELAY_MS = 400
-
-const ECHO_CLIENT_BUFFER_SIZE = 512
-const ECHO_CLIENT_MESSAGE_AMOUNT = 3
-const ECHO_CLIENT_MESSAGE_DELAY_MS = 1000
 
 type ClientConfig struct {
 	ServerHost string
@@ -79,34 +78,65 @@ func (client *Client) Run() error {
 		return err
 	}
 	defer output_file.Close()
+
+	agency, err := strconv.ParseUint(client.config.AgencyId, 10, 8)
+	if err != nil {
+		return err
+	}
 	
 	scanner := bufio.NewScanner(input_file)
 	for scanner.Scan() {
         clientMessage := scanner.Text()
+		bet, err := domain.NewBetFromInputLine(clientMessage)
+		if err != nil {
+			logger.Error("parse-input-line", logger.Fail, "line", clientMessage, "err", err)
+			return err
+		}
+		payload_bet, err := bet.MarshalBet()
+		if err != nil {
+			logger.Error("marshal-bet", logger.Fail, "line", clientMessage, "err", err)
+			return err
+		}
+
         messageArgs := []any{"agency-id", client.config.AgencyId, "message", clientMessage}
 
-		if err := safe_socket.SendAll(client.conn, []byte(clientMessage)); err != nil {
+		if err := safe_socket.SendFrame(client.conn, safe_socket.OpSendBet, byte(agency), payload_bet); err != nil {
 			logger.Error("send-message", logger.Fail, messageArgs...)
 			return err
 		}
         logger.Info(mainAction, logger.InProgress, messageArgs...)
+			
+		// aca podría esperar un ack
 
-		responseBuffer, err := safe_socket.RecvAll(client.conn, ECHO_CLIENT_BUFFER_SIZE)
-		if err != nil {
-			logger.Error("recv-response", logger.Fail, messageArgs...)
-			return err
-		}
-		
-
-		if _, err := output_file.WriteString(string(responseBuffer) + "\n"); err != nil {
-			logger.Error("write-output-file", logger.Fail, "err", err)
-			return err
-		}
     }
 
 	if err := scanner.Err(); err != nil {
         logger.Error("scan-file", logger.Fail, "err", err)
 		return err
+	}
+
+	if err := safe_socket.SendFrame(client.conn, safe_socket.OpEndBets, byte(agency), nil); err != nil {
+		return err
+	}
+
+	opcode, _, responseBuffer, err := safe_socket.RecvFrame(client.conn)
+	if err != nil {
+		logger.Error("recv-response", logger.Fail, "agency-id", client.config.AgencyId)
+		return err
+	}
+	if opcode == safe_socket.OpWinnersList {
+		winners, err := domain.UnmarshalBets(responseBuffer)
+		if err != nil {
+			return err
+		}
+		logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId, "winners-count", len(winners))
+		for _, winner := range winners {
+			line := fmt.Sprintf("%s,%s,%d,%s,%d\n", winner.Name, winner.LastName, winner.Dni, winner.Date, winner.Number)
+			if _, err := output_file.WriteString(line); err != nil {
+				logger.Error("write-output-file", logger.Fail, "err", err)
+				return err
+			}
+		}
 	}
 
 	logger.Info(mainAction, logger.Success, "agency-id", client.config.AgencyId)

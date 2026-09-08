@@ -1,6 +1,8 @@
 import socket
+import struct
 
-# TODO: Complete with a short-read/short-write tolerant implementation
+HEADER_SIZE = 6
+
 
 
 def recv_all(socket: socket.socket, size):
@@ -27,3 +29,19 @@ def send_all(socket: socket.socket, bytes):
             raise RuntimeError("socket connection broken")
         
     return bytesWritten
+
+
+def recv_frame(socket: socket.socket):
+    header = recv_all(socket, HEADER_SIZE)
+    opcode = header[0]
+    agency = header[1]
+    payload_size = struct.unpack(">I", header[2:])[0]
+    payload = recv_all(socket, payload_size)
+    return opcode, agency, payload
+
+
+def send_frame(socket: socket.socket, opcode: int, agency: int, payload: bytes):
+    header = bytes([opcode, agency]) + struct.pack(">I", len(payload))
+    return send_all(socket, header + payload)
+
+

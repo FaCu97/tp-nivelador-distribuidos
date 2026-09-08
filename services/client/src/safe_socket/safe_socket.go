@@ -1,6 +1,19 @@
 package safe_socket
 
-import "io"
+import (
+    "encoding/binary"
+    "io"
+)
+
+const HEADER_SIZE = 6
+
+const (
+	OpSendBet     uint8 = 0x01
+	OpEndBets     uint8 = 0x02
+	OpWinnersList uint8 = 0x03
+	OpAck         uint8 = 0x0A
+	OpError       uint8 = 0x0B
+)
 
 //TODO: Complete with a short-read/short-write tolerant implementation
 
@@ -32,4 +45,33 @@ func RecvAll(socket io.Reader, size int) ([]byte, error) {
 		}
 	}
 	return buff, nil
+}
+
+func SendFrame(socket io.Writer, opcode byte, agency byte, payload []byte) error {
+	header := make([]byte, HEADER_SIZE)
+	header[0] = opcode
+	header[1] = agency
+
+	payloadSize := uint32(len(payload))
+	binary.BigEndian.PutUint32(header[2:], payloadSize)
+
+	frame := append(header, payload...)
+	return SendAll(socket, frame)
+}
+
+func RecvFrame(socket io.Reader) (byte, byte, []byte, error) {
+	header, err := RecvAll(socket, HEADER_SIZE)
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	opcode := header[0]
+	agency := header[1]
+	payloadSize := binary.BigEndian.Uint32(header[2:])
+	payload, err := RecvAll(socket, int(payloadSize))
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	return opcode, agency, payload, nil
 }
