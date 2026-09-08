@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strconv"
-	"strings"
 )
 
 type Bet struct {
@@ -23,72 +22,64 @@ const (
 	maxBatchCount  = 1<<16 - 1
 )
 
-func (bet *Bet) MarshalBet() ([]byte, error) {
-	buf := new(bytes.Buffer)
-	
+func (bet *Bet) MarshalInto(buf *bytes.Buffer) error {
 	nameBytes := []byte(bet.Name)
 	lastNameBytes := []byte(bet.LastName)
 
 	if len(nameBytes) > maxNameSize || len(lastNameBytes) > maxNameSize {
-		return nil, fmt.Errorf("nombre o apellido demasiado largos (máximo 255 bytes)")
+		return fmt.Errorf("nombre o apellido demasiado largos (máximo 255 bytes)")
 	}
 
 	// 1. NAME_SIZE (uint8) + NAME
 	if err := buf.WriteByte(byte(len(nameBytes))); err != nil {
-		return nil, err
+		return err
 	}
 	if _, err := buf.Write(nameBytes); err != nil {
-		return nil, err
+		return err
 	}
 
 	// 2. LAST_NAME_SIZE (uint8) + LAST_NAME
 	if err := buf.WriteByte(byte(len(lastNameBytes))); err != nil {
-		return nil, err
+		return err
 	}
 	if _, err := buf.Write(lastNameBytes); err != nil {
-		return nil, err
+		return err
 	}
 
 	// 3. DNI (uint32) -> 4 bytes en Big-Endian
 	if err := binary.Write(buf, binary.BigEndian, bet.Dni); err != nil {
-		return nil, err
+		return err
 	}
 
 	// 4. DATE (string 10 bytes fijos)
 	dateBytes := []byte(bet.Date)
 	if len(dateBytes) != birthdateSize {
-		return nil, fmt.Errorf("la fecha debe medir exactamente 10 bytes (YYYY-MM-DD), midió %d", len(dateBytes))
+		return fmt.Errorf("la fecha debe medir exactamente 10 bytes (YYYY-MM-DD), midió %d", len(dateBytes))
 	}
 	buf.Write(dateBytes)
 
 	// 5. NUMBER (uint32) -> 4 bytes en Big-Endian (Network Byte Order)
 	if err := binary.Write(buf, binary.BigEndian, bet.Number); err != nil {
-		return nil, err
+		return err
 	}
 
-	// Retornamos el array de bytes final
-	return buf.Bytes(), nil
+	return nil
 }
 
-func MarshalBets(bets []*Bet) ([]byte, error) {
-	buf := new(bytes.Buffer)
-
+func MarshalBets(bets []*Bet, buf *bytes.Buffer) error {
+	buf.Reset()
 	if len(bets) > maxBatchCount {
-		return nil, fmt.Errorf("demasiadas apuestas en el batch")
+		return fmt.Errorf("demasiadas apuestas en el batch")
 	}
 	if err := binary.Write(buf, binary.BigEndian, uint16(len(bets))); err != nil {
-		return nil, err
+		return err
 	}
 	for _, bet := range bets {
-		betBytes, err := bet.MarshalBet()
-		if err != nil {
-			return nil, err
-		}
-		if _, err := buf.Write(betBytes); err != nil {
-			return nil, err
+		if err := bet.MarshalInto(buf); err != nil {
+			return err
 		}
 	}
-	return buf.Bytes(), nil
+	return nil
 }
 
 func UnmarshalBet(data []byte) (*Bet, int, error) {
@@ -166,28 +157,34 @@ func UnmarshalBets(data []byte) ([]*Bet, error) {
 }
 
 func NewBetFromInputLine(line string) (*Bet, error) {
-	parts := strings.Split(line, ",")
-	if len(parts) != 5 {
-		return nil, fmt.Errorf("línea de entrada inválida: %s", line)
+	bet := &Bet{}
+	if err := ParseBetFromBytes([]byte(line), bet); err != nil {
+		return nil, err
 	}
-
-	dni, err := strconv.ParseUint(parts[2], 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("DNI inválido: %s", parts[2])
-	}
-
-	number, err := strconv.ParseUint(parts[4], 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("Número inválido: %s", parts[4])
-	}
-
-	bet := &Bet{
-		Name:     parts[0],
-		LastName: parts[1],
-		Dni:      uint32(dni),
-		Date:     parts[3],
-		Number:   uint32(number),
-	}
-
 	return bet, nil
+}
+
+func ParseBetFromBytes(line []byte, bet *Bet) error {
+	fields := bytes.Split(line, []byte{','})
+	if len(fields) != 5 {
+		return fmt.Errorf("línea de entrada inválida: faltan o sobran campos")
+	}
+
+	dni, err := strconv.ParseUint(string(fields[2]), 10, 32)
+	if err != nil {
+		return fmt.Errorf("DNI inválido")
+	}
+
+	number, err := strconv.ParseUint(string(fields[4]), 10, 32)
+	if err != nil {
+		return fmt.Errorf("Número inválido")
+	}
+
+	bet.Name = string(fields[0])
+	bet.LastName = string(fields[1])
+	bet.Dni = uint32(dni)
+	bet.Date = string(fields[3])
+	bet.Number = uint32(number)
+
+	return nil
 }

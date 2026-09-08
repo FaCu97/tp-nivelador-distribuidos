@@ -55,8 +55,13 @@ func SendFrame(socket io.Writer, opcode byte, agency byte, payload []byte) error
 	payloadSize := uint32(len(payload))
 	binary.BigEndian.PutUint32(header[2:], payloadSize)
 
-	frame := append(header, payload...)
-	return SendAll(socket, frame)
+	if err := SendAll(socket, header); err != nil {
+		return err
+	}
+	if len(payload) > 0 {
+		return SendAll(socket, payload)
+	}
+	return nil
 }
 
 func RecvFrame(socket io.Reader) (byte, byte, []byte, error) {
