@@ -22,6 +22,7 @@ type ClientConfig struct {
 	AgencyId   string
 	InputFile  string
 	OutputFile string
+	BatchSize  uint16
 }
 
 type Client struct {
@@ -83,32 +84,70 @@ func (client *Client) Run() error {
 	if err != nil {
 		return err
 	}
-	
+	bet_count := uint16(0)
 	scanner := bufio.NewScanner(input_file)
+	bets := make([]*domain.Bet, 0)
 	for scanner.Scan() {
-        clientMessage := scanner.Text()
+		clientMessage := scanner.Text()
 		bet, err := domain.NewBetFromInputLine(clientMessage)
 		if err != nil {
 			logger.Error("parse-input-line", logger.Fail, "line", clientMessage, "err", err)
 			return err
 		}
-		payload_bet, err := bet.MarshalBet()
-		if err != nil {
-			logger.Error("marshal-bet", logger.Fail, "line", clientMessage, "err", err)
-			return err
+		bet_count++
+		bets = append(bets, bet)
+
+		if bet_count >= client.config.BatchSize {
+			payload_bets, err := domain.MarshalBets(bets)
+			if err != nil {
+				logger.Error("marshal-bets", logger.Fail, "err", err)
+				return err
+			}
+
+			messageArgs := []any{"agency-id", client.config.AgencyId, "bets-count", bet_count}
+
+			if err := safe_socket.SendFrame(client.conn, safe_socket.OpSendBets, byte(agency), payload_bets); err != nil {
+				logger.Error("send-bets", logger.Fail, messageArgs...)
+				return err
+			}
+			logger.Info(mainAction, logger.InProgress, messageArgs...)
+
+			ackOpcode, _, _, err := safe_socket.RecvFrame(client.conn)
+			if err != nil {
+				return err
+			}
+
+			if ackOpcode != safe_socket.OpAck {
+				return fmt.Errorf("respuesta inesperada: opcode %d", ackOpcode)
+			}
+			bets = make([]*domain.Bet, 0)
+			bet_count = 0
 		}
-
-        messageArgs := []any{"agency-id", client.config.AgencyId, "message", clientMessage}
-
-		if err := safe_socket.SendFrame(client.conn, safe_socket.OpSendBet, byte(agency), payload_bet); err != nil {
-			logger.Error("send-message", logger.Fail, messageArgs...)
-			return err
-		}
-        logger.Info(mainAction, logger.InProgress, messageArgs...)
-			
-		// aca podría esperar un ack
-
     }
+	if bet_count > 0 {
+		payload_bets, err := domain.MarshalBets(bets)
+		if err != nil {
+			logger.Error("marshal-bets", logger.Fail, "err", err)
+			return err
+		}
+
+		messageArgs := []any{"agency-id", client.config.AgencyId, "bets-count", bet_count}
+
+		if err := safe_socket.SendFrame(client.conn, safe_socket.OpSendBets, byte(agency), payload_bets); err != nil {
+			logger.Error("send-bets", logger.Fail, messageArgs...)
+			return err
+		}
+		logger.Info(mainAction, logger.InProgress, messageArgs...)
+
+		ackOpcode, _, _, err := safe_socket.RecvFrame(client.conn)
+		if err != nil {
+			return err
+		}
+
+		if ackOpcode != safe_socket.OpAck {
+			return fmt.Errorf("respuesta inesperada: opcode %d", ackOpcode)
+		}
+	}
 
 	if err := scanner.Err(); err != nil {
         logger.Error("scan-file", logger.Fail, "err", err)

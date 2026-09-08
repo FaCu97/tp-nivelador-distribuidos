@@ -19,13 +19,14 @@ class Server:
                 opcode, agency, client_message = safe_socket.recv_frame(client_socket)
                 message_amount += 1
 
-                if opcode == protocol.Opcode.SEND_BET:
+                if opcode == protocol.Opcode.SEND_BETS:
                     logger.info(action, logger.LogResult.success, "messages-amount", message_amount)
-                    bet = protocol.decode_bet(client_message, agency)
-                    self.lottery.store_bets([bet])
+                    bets = protocol.decode_bets(client_message, agency)
+
+                    self.lottery.store_bets(bets)
+                    safe_socket.send_frame(client_socket, protocol.Opcode.ACK, agency, b"")
                 if opcode == protocol.Opcode.END_BETS:
                     logger.info(action, logger.LogResult.success, "messages-amount", message_amount)
-                    bets = self.lottery.load_bets()
                     winners = [
                         bet
                         for bet in self.lottery.load_bets()
@@ -38,7 +39,7 @@ class Server:
                         protocol.marshal_bets(winners),
                     )
                     return
-               # safe_socket.send_frame(client_socket, opcode, agency, client_message)
+
         except Exception as e:
             logger.error(
                 action, logger.LogResult.fail, "messages-amount", message_amount

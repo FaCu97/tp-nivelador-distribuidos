@@ -40,6 +40,7 @@ do
       - SERVER_PORT=5678
       - INPUT_FILE=/input/input-$i.csv
       - OUTPUT_FILE=/output/output-$i.csv
+      - BATCH_SIZE=10
     volumes:
       - ./input/input-$i.csv:/input/input-$i.csv
       - ./output:/output" >> "$file_name"

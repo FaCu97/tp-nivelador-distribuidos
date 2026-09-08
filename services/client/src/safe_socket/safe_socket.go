@@ -8,7 +8,7 @@ import (
 const HEADER_SIZE = 6
 
 const (
-	OpSendBet     uint8 = 0x01
+	OpSendBets     uint8 = 0x01
 	OpEndBets     uint8 = 0x02
 	OpWinnersList uint8 = 0x03
 	OpAck         uint8 = 0x0A

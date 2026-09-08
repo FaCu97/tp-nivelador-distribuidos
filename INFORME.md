@@ -20,16 +20,24 @@ El payload comienza inmediatamente después del header.
 
 | Opcode | Valor | Dirección | Descripción |
 |---|---:|---|---|
-| `SEND_BET` | `0x01` | Cliente -> servidor | Envía una apuesta. |
+| `SEND_BETS` | `0x01` | Cliente -> servidor | Envía un batch de apuestas. |
 | `END_BETS` | `0x02` | Cliente -> servidor | Indica que la agencia terminó de enviar sus apuestas. No tiene payload. |
 | `WINNERS_LIST` | `0x03` | Servidor -> cliente | Devuelve los ganadores correspondientes a la agencia. |
-| `ACK` | `0x0A` | Servidor -> cliente | Confirmación, reservado para el protocolo. | (aun no implementado)
-| `ERROR` | `0x0B` | Servidor -> cliente | Notificación de error, reservado para el protocolo. | (aun no implementado)
+| `ACK` | `0x0A` | Servidor -> cliente | Confirma que el batch fue procesado correctamente. |
+| `ERROR` | `0x0B` | Servidor -> cliente | Notificación de error, reservado para el protocolo. |
 
 ## Serialización de una apuesta
 
-El payload de `SEND_BET` contiene una apuesta serializada con el siguiente
-formato. Los campos numéricos utilizan big-endian:
+El payload de `SEND_BETS` contiene un batch de apuestas. Los campos numéricos
+utilizan big-endian:
+
+| Campo | Tamaño | Descripción |
+|---|---:|---|
+| `BET_COUNT` | 2 bytes | Cantidad de apuestas, como uint16 |
+| `BET_COUNT` | 2 bytes | Cantidad de apuestas del batch como `uint16`. |
+| `BET_1 ... BET_N` | Variable | Apuestas serializadas consecutivamente. |
+
+Cada apuesta tiene este formato:
 
 | Campo | Tamaño | Descripción |
 |---|---:|---|
@@ -43,15 +51,17 @@ formato. Los campos numéricos utilizan big-endian:
 
 ## Lista de ganadores
 
-El payload de `WINNERS_LIST` permite transportar una cantidad variable de
-apuestas usando este formato:
+El payload de `WINNERS_LIST` utiliza el mismo formato de lista:
 
 ```text
-WINNERS_COUNT (uint32, 4 bytes)
-WINNER_DATA   (variable)
-WINNER_DATA   (variable)
+BET_COUNT (uint16, 2 bytes)
+BET_1
+BET_2
 ...
 ```
+
+El cliente interpreta este payload cuando recibe el opcode `WINNERS_LIST` y
+persiste los ganadores correspondientes a su agencia en `OUTPUT_FILE`.
 
 
 ## Flujo de mensajes
@@ -59,7 +69,16 @@ WINNER_DATA   (variable)
 Para cada agencia, el intercambio es:
 
 ```text
-Cliente -> Servidor: SEND_BET (una vez por apuesta)
+Cliente -> Servidor: SEND_BETS (batch 1)
+Servidor -> Cliente: ACK
+Cliente -> Servidor: SEND_BETS (batch 2)
+Servidor -> Cliente: ACK
+...
 Cliente -> Servidor: END_BETS
 Servidor -> Cliente: WINNERS_LIST
 ```
+
+El cliente espera el `ACK` de cada batch antes de enviar el siguiente. El
+servidor envía el `ACK` únicamente después de deserializar y almacenar todas
+las apuestas del batch. Si el payload es inválido o no coincide con la
+cantidad declarada, no se confirma el batch.

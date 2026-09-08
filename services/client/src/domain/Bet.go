@@ -16,13 +16,20 @@ type Bet struct {
     Number uint16
 }
 
+const (
+	maxNameSize    = 255
+	birthdateSize  = 10
+	batchCountSize = 2
+	maxBatchCount  = 1<<16 - 1
+)
+
 func (bet *Bet) MarshalBet() ([]byte, error) {
 	buf := new(bytes.Buffer)
 	
 	nameBytes := []byte(bet.Name)
 	lastNameBytes := []byte(bet.LastName)
 
-	if len(nameBytes) > 255 || len(lastNameBytes) > 255 {
+	if len(nameBytes) > maxNameSize || len(lastNameBytes) > maxNameSize {
 		return nil, fmt.Errorf("nombre o apellido demasiado largos (máximo 255 bytes)")
 	}
 
@@ -49,7 +56,7 @@ func (bet *Bet) MarshalBet() ([]byte, error) {
 
 	// 4. DATE (string 10 bytes fijos)
 	dateBytes := []byte(bet.Date)
-	if len(dateBytes) != 10 {
+	if len(dateBytes) != birthdateSize {
 		return nil, fmt.Errorf("la fecha debe medir exactamente 10 bytes (YYYY-MM-DD), midió %d", len(dateBytes))
 	}
 	buf.Write(dateBytes)
@@ -60,6 +67,27 @@ func (bet *Bet) MarshalBet() ([]byte, error) {
 	}
 
 	// Retornamos el array de bytes final
+	return buf.Bytes(), nil
+}
+
+func MarshalBets(bets []*Bet) ([]byte, error) {
+	buf := new(bytes.Buffer)
+
+	if len(bets) > maxBatchCount {
+		return nil, fmt.Errorf("demasiadas apuestas en el batch")
+	}
+	if err := binary.Write(buf, binary.BigEndian, uint16(len(bets))); err != nil {
+		return nil, err
+	}
+	for _, bet := range bets {
+		betBytes, err := bet.MarshalBet()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := buf.Write(betBytes); err != nil {
+			return nil, err
+		}
+	}
 	return buf.Bytes(), nil
 }
 
@@ -99,7 +127,7 @@ func UnmarshalBet(data []byte) (*Bet, int, error) {
 	}
 
 	// 4. DATE (string 10 bytes fijos)
-	dateBytes := make([]byte, 10)
+	dateBytes := make([]byte, birthdateSize)
 	if bytesRead, err := buf.Read(dateBytes); err != nil {
 		return nil, 0, err
 	} else if bytesRead != len(dateBytes) {
@@ -116,14 +144,14 @@ func UnmarshalBet(data []byte) (*Bet, int, error) {
 }
 
 func UnmarshalBets(data []byte) ([]*Bet, error) {
-	if len(data) < 4 {
+	if len(data) < batchCountSize {
 		return nil, fmt.Errorf("payload de ganadores incompleto")
 	}
 
-	count := binary.BigEndian.Uint32(data[:4])
-	offset := 4
+	count := binary.BigEndian.Uint16(data[:batchCountSize])
+	offset := batchCountSize
 	winners := make([]*Bet, 0, int(count))
-	for i := uint32(0); i < count; i++ {
+	for i := uint16(0); i < count; i++ {
 		bet, bytesRead, err := UnmarshalBet(data[offset:])
 		if err != nil {
 			return nil, err
