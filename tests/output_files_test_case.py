@@ -6,6 +6,7 @@ from .utils import docker, docker_compose
 from .test_case import TestCase
 
 DOCKER_COMPOSE_PATH = "docker-compose.yaml"
+
 HOST_INPUT_FILE_PATH = "./input"
 HOST_OUTPUT_FILE_PATH = "./output"
 
@@ -35,6 +36,7 @@ class OutputFiles(TestCase):
         output_file = OutputFiles._guest_file_path_to_host(
             HOST_OUTPUT_FILE_PATH, guest_output_file_path
         )
+
         agency_id = int(
             docker_compose.find_environment_variable(client_service, "AGENCY_ID")
         )

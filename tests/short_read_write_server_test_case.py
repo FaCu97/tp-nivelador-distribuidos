@@ -17,6 +17,7 @@ class ChunkedSocket(socket.socket):
             data_len_to_recv = 1
         else:
             data_len_to_recv = random.randrange(1, max_read_size)
+
         data_to_recv = self.recv_buffer[:data_len_to_recv]
         self.recv_buffer = self.recv_buffer[data_len_to_recv:]
         return data_to_recv
