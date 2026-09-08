@@ -48,18 +48,11 @@ apuestas usando este formato:
 
 ```text
 WINNERS_COUNT (uint32, 4 bytes)
-WINNER_SIZE   (uint32, 4 bytes)
 WINNER_DATA   (variable)
-WINNER_SIZE   (uint32, 4 bytes)
 WINNER_DATA   (variable)
 ...
 ```
 
-`WINNERS_COUNT` indica cuántas apuestas siguen. Cada ganador tiene su propio
-tamaño para que el cliente pueda recorrer el payload sin depender de un tamaño
-fijo. El cliente interpreta este formato únicamente cuando el opcode recibido
-es `WINNERS_LIST`, deserializa cada apuesta y persiste sus campos en
-`OUTPUT_FILE`.
 
 ## Flujo de mensajes
 

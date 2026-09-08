@@ -79,8 +79,5 @@ def marshal_bets(bets: list[Bet]) -> bytes:
     payloads = [marshal_bet(bet) for bet in bets]
     return (
         len(payloads).to_bytes(4, byteorder="big")
-        + b"".join(
-            len(payload).to_bytes(4, byteorder="big") + payload
-            for payload in payloads
-        )
+        + b"".join(payload for payload in payloads)
     )
