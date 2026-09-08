@@ -20,6 +20,8 @@ services:
       - PYTHONUNBUFFERED=1
       - SERVER_HOST=server
       - SERVER_PORT=5678
+    ports:
+        - "5678:5678"
 EOF
 
 for ((i=0; i<client_count; i++));
