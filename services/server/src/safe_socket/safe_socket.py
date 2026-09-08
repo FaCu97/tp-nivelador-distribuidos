@@ -25,7 +25,7 @@ def send_all(socket: socket.socket, bytes):
     while bytesWritten < bytesToWrite:
         n = socket.send(bytes[bytesWritten:])
         if n == 0:
-            raise RuntimeError("socket connection broken")
+            continue
         bytesWritten += n
         
     return bytesWritten
