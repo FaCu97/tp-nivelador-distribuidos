@@ -65,6 +65,31 @@ persiste los ganadores correspondientes a su agencia en `OUTPUT_FILE`.
 El campo `NUMBER` ocupa 4 bytes y se representa como `uint32` en big-endian,
 tanto en los batches enviados por el cliente como en la lista de ganadores.
 
+## Concurrencia y sincronización
+
+El servidor mantiene un hilo principal que crea el socket TCP, ejecuta
+`bind` y `listen`, y permanece aceptando conexiones. Cada conexión aceptada
+se procesa en un hilo de agencia independiente. De esta forma, una agencia
+puede continuar enviando sus batches mientras el hilo principal acepta nuevas
+conexiones y otros hilos atienden a las demás agencias.
+
+Todas las agencias comparten la instancia de `Lottery`, el cual está protegido con
+`file_lock`. El lock cubre solamente la escritura del batch y se libera antes
+de enviar el `ACK`, evitando mantenerlo durante operaciones de red.
+
+Al recibir `END_BETS`, el hilo de la agencia informa que terminó su ingesta.
+Para ello incrementa `agencias_listas` dentro de `quorum_cond`, que también
+protege el acceso al contador, y ejecuta `notify`. Un hilo de sorteo único
+espera con `wait_for` hasta que `agencias_listas` alcance
+`AGENCY_QUORUM_MIN`.
+
+Una vez alcanzado el quórum, el hilo de sorteo lee las apuestas, calcula los
+ganadores y construye `ganadores_memoria`, agrupando los resultados por
+`agency_id`. Luego activa `sorteo_listo`, un `Event` compartido que libera a
+los hilos de agencia que estaban esperando. Cada hilo consulta únicamente la
+entrada correspondiente a su propia agencia, serializa esa lista y envía su
+`WINNERS_LIST`
+
 
 ## Flujo de mensajes
 
