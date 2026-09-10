@@ -118,18 +118,18 @@ func (client *Client) Run() error {
 		if client.IsShutdown() {
 			return nil
 		}
-		
+
 		lineBytes := bytes.TrimSpace(scanner.Bytes())
 		if len(lineBytes) == 0 {
 			continue
 		}
-		
+
 		bet := &betsPool[bet_count]
 		if err := domain.ParseBetFromBytes(lineBytes, bet); err != nil {
 			logger.Error("parse-input-line", logger.Fail, "err", err)
 			return err
 		}
-		
+
 		bet_count++
 		bets = append(bets, bet)
 
@@ -146,7 +146,7 @@ func (client *Client) Run() error {
 				return err
 			}
 
-			ackOpcode, _, _, err := safe_socket.RecvFrame(client.conn)
+			opcode, _, _, err := safe_socket.RecvFrame(client.conn)
 			if err != nil {
 				if client.IsShutdown() {
 					return nil
@@ -154,8 +154,8 @@ func (client *Client) Run() error {
 				return err
 			}
 
-			if ackOpcode != safe_socket.OpAck {
-				return fmt.Errorf("respuesta inesperada: opcode %d", ackOpcode)
+			if opcode != safe_socket.OpAck {
+				return fmt.Errorf("respuesta inesperada: opcode %d", opcode)
 			}
 			bets = bets[:0]
 			bet_count = 0
