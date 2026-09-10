@@ -109,3 +109,9 @@ El cliente espera el `ACK` de cada batch antes de enviar el siguiente. El
 servidor envía el `ACK` únicamente después de deserializar y almacenar todas
 las apuestas del batch. Si el payload es inválido o no coincide con la
 cantidad declarada, no se confirma el batch.
+
+## Terminación Graceful (SIGTERM)
+
+- En el cliente: Se captura la señal del sistema operativo mediante signal.Notify() en un hilo independiente. Al recibirla, se activa un canal shutdown que funciona como semáforo. El ciclo de lectura y envío principal (client.go) consulta constantemente el método client.IsShutdown(); si este retorna verdadero, el cliente aborta la ejecución limpiamente y retorna antes de que docker lance un SIGKILL.
+
+- En el servidor: Se asocia un manejador de señales con signal.signal(). Al recibir la señal, se setea self.shutdown_event.set() y se notifica a todos los hilos. Esto destraba el hilo del lottery y los hilos de los clientes conectados, los cuales evalúan la condición del evento en sus ciclos while, saliendo de sus bucles y cerrando de forma segura sus sockets de comunicación.
